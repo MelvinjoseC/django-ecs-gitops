@@ -50,7 +50,7 @@ resource "aws_ecs_task_definition" "app" {
 
     # We will update the healthCheck in a later commit to match our new python healthcheck
     healthCheck = {
-      command     = ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/api/', timeout=5)\" || exit 1"]
+      command     = ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health/', timeout=5)\" || exit 1"]
       interval    = 30
       timeout     = 10
       retries     = 3
