@@ -25,7 +25,18 @@ resource "aws_iam_role_policy" "ecs_execution_ssm" {
   role = aws_iam_role.ecs_execution.id
   policy = jsonencode({
     Version = "2012-10-17"
-    Statement = [{ Effect = "Allow", Action = ["ssm:GetParameters", "secretsmanager:GetSecretValue"], Resource = "*" }]
+    Statement = [{
+      Effect = "Allow"
+      Action = [
+        "ssm:GetParameters",
+        "ssm:GetParameter"
+      ]
+      Resource = [
+        var.secret_key_arn,
+        var.db_user_arn,
+        var.db_password_arn
+      ]
+    }]
   })
 }
 
