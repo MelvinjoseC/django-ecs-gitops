@@ -1,117 +1,108 @@
-# django-ecs-gitops
+# Production-Grade Django ECS GitOps
 
-A production-ready Django REST API deployed to AWS ECS Fargate with a full GitHub Actions CI/CD pipeline.
+A highly optimized, production-ready Django REST API deployed to AWS ECS Fargate with automated resource scaling, deep security hardening, and a robust GitOps CI/CD pipeline using GitHub Actions.
 
-## What this project demonstrates
+## Upgraded DevOps Architecture
 
-- GitHub Actions pipeline: test → security scan → Docker build → ECR push → Terraform → ECS deploy
-- Trivy vulnerability scanning on every build (DevSecOps)
-- Terraform-managed AWS infrastructure (ECS, ALB, ECR, CloudWatch, IAM)
-- Django REST API with PostgreSQL on RDS
-- Automated DB migrations via ECS run-task
-- CloudWatch alarms + Slack notifications
+This repository has been refactored and optimized according to modern production-grade cloud standards. The key improvements include:
 
-## Tech stack
+*   **Secure Containerization:**
+    *   **Multi-Stage Build:** Decreases image size and attack surface by isolating build dependencies from the runtime image.
+    *   **Non-Root Execution:** Runs the application as a restricted system user (`appuser`), minimizing host compromise risks.
+    *   **Native Python Healthcheck:** Replaces heavy external dependencies like `curl` in the Dockerfile with a lightweight python healthcheck script.
+*   **Infrastructure as Code (Terraform):**
+    *   **Modularization:** Split monolithic `main.tf` into functional modules (`provider.tf`, `ecr.tf`, `ecs.tf`, `monitoring.tf`, `security_groups.tf`, `iam.tf`, `autoscaling.tf`).
+    *   **Least Privilege IAM:** Restricted SSM parameter store access only to the explicit ARNs of required secrets.
+    *   **Global Tagging:** Integrated default tags into the AWS provider config.
+    *   **ECS Task Autoscaling:** Configured auto-scaling policies based on CPU and memory utilization thresholds.
+    *   **Predictable Deployments:** Enabled state locking templates (`backend.tf.example`).
+*   **Django Application Improvements:**
+    *   **Structured Logs:** Integrated `python-json-logger` for JSON-formatted console outputs, facilitating easier parsing in CloudWatch.
+    *   **Database Health Check:** Added a native API endpoint (`/api/health/`) verifying database connectivity.
+    *   **Security Hardening:** Enforced SSL redirects, secure session/CSRF cookies, and HSTS headers.
+*   **Developer Experience & Validation:**
+    *   **Pre-Commit Hooks:** Styled with Black, flake8, and terraform fmt using `.pre-commit-config.yaml`.
+    *   **Validation Script:** Added `scripts/validate.sh` for fast, pre-push compliance checks.
+    *   **Teardown Script:** Added `scripts/destroy_infra.sh` for safe teardown.
+*   **GitHub Actions CI/CD Pipeline:**
+    *   **Concurrency Limits:** Cancels redundant builds on consecutive pushes.
+    *   **Faster Builds:** Leverages caching for python dependencies and Docker build layers.
+    *   **Secured Workflows:** Recommends AWS OIDC authentication instead of static keys.
+    *   **Deep Scanning:** Inspects container images with Trivy and IaC configurations with tfsec.
+    *   **State Integrity:** Applies exact plans (`tfplan`) generated in the plan stage to guarantee predictable apply runs.
 
-| Layer       | Technology                        |
-|-------------|-----------------------------------|
-| App         | Django 4.2, Django REST Framework |
-| Container   | Docker, AWS ECR                   |
-| Infra       | Terraform, AWS ECS Fargate, ALB   |
-| CI/CD       | GitHub Actions                    |
-| Security    | Trivy, AWS IAM, SSM SecureString  |
-| Monitoring  | AWS CloudWatch, SNS, Slack        |
-| Database    | PostgreSQL (RDS)                  |
+---
 
-## Local development
+## Directory Structure
 
-```bash
-# Clone and start locally
-git clone https://github.com/YOUR_USERNAME/django-ecs-gitops
-cd django-ecs-gitops
-cp .env.example .env
-docker compose up --build
+```text
+├── .github/workflows/    # CI/CD pipelines (GitHub Actions)
+├── app/                  # Django backend application code
+│   ├── api/              # REST Framework endpoints, models, views, and tests
+│   └── core/             # Project settings, URLs, and WSGI definitions
+├── scripts/              # Bootstrap, validation, and teardown scripts
+├── terraform/            # Infrastructure-as-code files
+├── Dockerfile            # Optimized multi-stage Docker build
+├── docker-compose.yml    # Development stack orchestration (includes pgAdmin)
+└── requirements.txt      # Production package dependencies
 ```
 
-API will be at: http://localhost:8000/api/tasks/
+---
 
-## Uploading to your GitHub Repository
+## Local Development
 
-To push this codebase to your own GitHub repository:
+1.  **Clone the repository:**
+    ```bash
+    git clone https://github.com/MelvinjoseC/django-ecs-gitops.git
+    cd django-ecs-gitops
+    ```
+2.  **Configure environment:**
+    ```bash
+    cp .env.example .env
+    # Adjust variables as needed
+    ```
+3.  **Spin up local services:**
+    ```bash
+    docker compose up --build
+    ```
+    *   **REST API:** [http://localhost:8000/api/tasks/](http://localhost:8000/api/tasks/)
+    *   **Health Status:** [http://localhost:8000/api/health/](http://localhost:8000/api/health/)
+    *   **pgAdmin DB Admin Console:** [http://localhost:5050/](http://localhost:5050/) (User: `admin@example.com`, Pass: `admin`)
 
-1. Create a new repository on GitHub (do **not** initialize it with a README, license, or `.gitignore` since they are already provided here).
-2. Open your terminal in this project directory and run:
-   ```bash
-   # Initialize git if not already initialized
-   git init
+---
 
-   # Add all files to the repository
-   git add .
+## Infrastructure Deployment
 
-   # Commit files
-   git commit -m "Initial commit - AWS ready"
+1.  **SSM Parameters Bootstrap:**
+    Run the setup script to store secure strings in AWS SSM:
+    ```bash
+    ./scripts/setup_secrets.sh
+    ```
+2.  **State Storage Backend Configuration (Recommended):**
+    Rename `terraform/backend.tf.example` to `backend.tf` and fill in your remote state S3 bucket and DynamoDB locking table details.
+3.  **Provision Resources:**
+    ```bash
+    cd terraform
+    terraform init
+    terraform plan -out=tfplan
+    terraform apply tfplan
+    ```
+4.  **Destroy Resources Safely:**
+    To decommission the infrastructure and delete SSM secrets:
+    ```bash
+    ./scripts/destroy_infra.sh
+    ```
 
-   # Rename default branch to main
-   git branch -M main
+---
 
-   # Add your GitHub repository as the remote origin
-   git remote add origin https://github.com/<your-github-username>/<your-repo-name>.git
+## CI/CD Pipeline Secret Requirements
 
-   # Push to main branch
-   git push -u origin main
-   ```
+Configure the following secrets in GitHub **Settings → Secrets and variables → Actions**:
 
-## GitHub Actions secrets required
-
-Add these in your repository **Settings → Secrets and variables → Actions → New repository secret**:
-
-| Secret | Description |
-|---|---|
-| `AWS_ACCESS_KEY_ID` | Your AWS IAM User access key (needs permissions to manage ECS, ECR, ALB, IAM, CloudWatch) |
-| `AWS_SECRET_ACCESS_KEY` | Your AWS IAM User secret access key |
-| `SUBNET_ID` | One of the public subnet IDs from your VPC (the ones used in `terraform.tfvars`) |
-| `SECURITY_GROUP_ID` | The ECS task security group ID (available as `ecs_tasks_security_group_id` output after running Terraform) |
-| `SLACK_WEBHOOK_URL` | (Optional) Slack incoming webhook URL for pipeline notifications |
-
-## Deploy infrastructure
-
-```bash
-# 1. Store secrets in SSM
-bash scripts/setup_secrets.sh
-
-
-# 2. Configure Terraform
-cp terraform/terraform.tfvars.example terraform/terraform.tfvars
-# Edit terraform.tfvars with your VPC, subnet, RDS details
-
-# 3. Apply infrastructure
-cd terraform
-terraform init
-terraform plan
-terraform apply
-```
-
-## Pipeline stages
-
-```
-push to main
-    ├── test & lint (pytest + flake8 + coverage)
-    ├── trivy security scan
-    ├── build & push Docker image to ECR
-    ├── terraform apply (infra update)
-    ├── ECS deploy + django migrate
-    └── Slack notification (success/failure)
-```
-
-## API endpoints
-
-| Method | Endpoint           | Description       |
-|--------|--------------------|-------------------|
-| GET    | /api/tasks/        | List all tasks    |
-| POST   | /api/tasks/        | Create a task     |
-| GET    | /api/tasks/{id}/   | Get task detail   |
-| PATCH  | /api/tasks/{id}/   | Update task       |
-| DELETE | /api/tasks/{id}/   | Delete task       |
-
-Search: `/api/tasks/?search=todo`
-Filter by status: `/api/tasks/?search=in_progress`
+| Secret Name | Description |
+| :--- | :--- |
+| `AWS_ACCESS_KEY_ID` | Access key for deployment user (if not using OIDC Role) |
+| `AWS_SECRET_ACCESS_KEY` | Secret access key for deployment user |
+| `SUBNET_ID` | public subnet ID used by Fargate for running migrations task |
+| `SECURITY_GROUP_ID` | ECS task security group ID (outputted after terraform apply) |
+| `SLACK_WEBHOOK_URL` | (Optional) Incoming Slack webhook for build notifications |
