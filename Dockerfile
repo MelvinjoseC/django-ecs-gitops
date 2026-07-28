@@ -26,12 +26,17 @@ WORKDIR /app
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && groupadd -r appuser && useradd -r -g appuser -d /app -s /sbin/nologin appuser
 
 COPY --from=builder /install /install
-COPY . .
+COPY --chown=appuser:appuser . .
 
 RUN python manage.py collectstatic --noinput || true
+
+RUN chown -R appuser:appuser /app
+
+USER appuser
 
 EXPOSE 8000
 
