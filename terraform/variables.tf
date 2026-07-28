@@ -84,3 +84,13 @@ variable "db_password_arn" {
   type        = string
   description = "The SSM Parameter ARN for the database password"
 }
+
+variable "tags" {
+  type        = map(string)
+  description = "A map of tags to assign to all resources"
+  default = {
+    Project     = "django-ecs-gitops"
+    Environment = "production"
+    ManagedBy   = "terraform"
+  }
+}
