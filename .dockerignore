@@ -1,0 +1,46 @@
+# Git
+.git
+.github
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.db
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+*.egg-info/
+.eggs/
+
+# Environments and Secrets
+.env
+.venv
+env/
+venv/
+ENV/
+*.pem
+
+# IDEs
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.swp
+
+# Terraform
+terraform/.terraform/
+terraform/*.tfstate*
+terraform/terraform.tfvars
+terraform/terraform.tfvars.json
+
+# Local storage and logs
+staticfiles/
+media/
+*.log
+tmp/
+db.sqlite3
