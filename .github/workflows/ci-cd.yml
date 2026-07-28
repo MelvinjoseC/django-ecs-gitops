@@ -82,11 +82,40 @@ jobs:
           name: coverage-report
           path: coverage.xml
 
-  # ── Job 2: Build, Scan & Push ──────────────────────────────────────────────
+  # ── Job 2: Terraform Lint & Format ─────────────────────────────────────────
+  terraform-lint:
+    name: Terraform Lint & Format
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.7.0"
+
+      - name: Terraform Format Check
+        working-directory: terraform/
+        run: terraform fmt -check
+
+      - name: Setup TFLint
+        uses: terraform-linters/setup-tflint@v4
+        with:
+          tflint_version: v0.50.0
+
+      - name: Run TFLint
+        working-directory: terraform/
+        run: |
+          tflint --init
+          tflint --color
+
+  # ── Job 3: Build, Scan & Push ──────────────────────────────────────────────
   build-and-push:
     name: Build, Scan & Push
     runs-on: ubuntu-latest
-    needs: test
+    needs: [test, terraform-lint]
     outputs:
       image: ${{ steps.push-image.outputs.image }}
 
