@@ -13,10 +13,13 @@ resource "aws_cloudwatch_metric_alarm" "cpu_high" {
   statistic           = "Average"
   threshold           = 80
   alarm_actions       = [aws_sns_topic.alerts.arn]
+
   dimensions = {
     ClusterName = aws_ecs_cluster.main.name
     ServiceName = aws_ecs_service.app.name
   }
 }
 
-resource "aws_sns_topic" "alerts" { name = "${var.ecs_cluster_name}-alerts" }
+resource "aws_sns_topic" "alerts" {
+  name = "${var.ecs_cluster_name}-alerts"
+}
