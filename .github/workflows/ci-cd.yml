@@ -197,11 +197,11 @@ jobs:
 
       - name: Terraform Plan
         working-directory: terraform/
-        run: terraform plan -var="image_tag=${{ github.sha }}"
+        run: terraform plan -out=tfplan -var="image_tag=${{ github.sha }}"
 
       - name: Terraform Apply
         working-directory: terraform/
-        run: terraform apply -auto-approve -var="image_tag=${{ github.sha }}"
+        run: terraform apply -auto-approve tfplan
 
   # ── Job 5: Deploy to ECS + Migrate ────────────────────────────────────────
   deploy:
