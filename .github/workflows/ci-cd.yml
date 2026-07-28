@@ -141,6 +141,12 @@ jobs:
           vuln-type: "os,library"
           severity: "CRITICAL"
 
+      # DevOps Recommendation: Avoid hardcoded credentials. Use AWS OIDC instead:
+      # permissions:
+      #   id-token: write
+      #   contents: read
+      # with:
+      #   role-to-assume: arn:aws:iam::<ACCOUNT_ID>:role/<ROLE_NAME>
       - name: Configure AWS credentials
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         uses: aws-actions/configure-aws-credentials@v4
@@ -179,6 +185,12 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      # DevOps Recommendation: Avoid hardcoded credentials. Use AWS OIDC instead:
+      # permissions:
+      #   id-token: write
+      #   contents: read
+      # with:
+      #   role-to-assume: arn:aws:iam::<ACCOUNT_ID>:role/<ROLE_NAME>
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -214,6 +226,12 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      # DevOps Recommendation: Avoid hardcoded credentials. Use AWS OIDC instead:
+      # permissions:
+      #   id-token: write
+      #   contents: read
+      # with:
+      #   role-to-assume: arn:aws:iam::<ACCOUNT_ID>:role/<ROLE_NAME>
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
