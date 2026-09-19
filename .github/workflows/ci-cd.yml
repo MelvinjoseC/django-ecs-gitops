@@ -1,10 +1,18 @@
-name: CI/CD Pipeline
+name: CI/CD GitOps Pipeline
 
 on:
   push:
     branches: [main]
   pull_request:
     branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  id-token: write
 
 env:
   AWS_REGION: ap-south-1
@@ -14,7 +22,7 @@ env:
   CONTAINER_NAME: django-app
 
 jobs:
-  # ── Job 1: Test + Lint ─────────────────────────────────────────────────────
+  # ── Job 1: Test & Lint ──────────────────────────────────────────────────────
   test:
     name: Test & Lint
     runs-on: ubuntu-latest
@@ -53,6 +61,9 @@ jobs:
         with:
           python-version: "3.11"
           cache: "pip"
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
 
       - name: Install dependencies
         run: pip install -r requirements-dev.txt
@@ -75,43 +86,68 @@ jobs:
           name: coverage-report
           path: coverage.xml
 
-  # ── Job 2: Security Scan ───────────────────────────────────────────────────
-  security-scan:
-    name: Trivy Security Scan
+  # ── Job 2: Terraform Lint & Format ──────────────────────────────────────────
+  terraform-lint:
+    name: Terraform Lint & Format
     runs-on: ubuntu-latest
-    needs: test
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Build Docker image for scanning
-        run: docker build -t scan-image:latest .
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.7.0"
+
+      - name: Terraform Format Check
+        working-directory: terraform/
+        run: terraform fmt -check
+
+      - name: Setup TFLint
+        uses: terraform-linters/setup-tflint@v4
+        with:
+          tflint_version: v0.50.0
+
+      - name: Run TFLint
+        working-directory: terraform/
+        run: |
+          tflint --init || true
+          tflint --color || true
+
+      - name: Run tfsec security scan
+        uses: aquasecurity/tfsec-action@v1.0.0
+        with:
+          working_directory: terraform/
+        continue-on-error: true
+
+  # ── Job 3: Build, Scan & Push Image ─────────────────────────────────────────
+  build-and-push:
+    name: Build, Scan & Push Image
+    runs-on: ubuntu-latest
+    needs: [test, terraform-lint]
+    outputs:
+      image: ${{ steps.push-image.outputs.image }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build Docker image locally
+        run: docker build -t local-image:latest .
 
       - name: Run Trivy vulnerability scan
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: "scan-image:latest"
+          image-ref: "local-image:latest"
           format: "table"
           exit-code: "1"
           ignore-unfixed: true
           vuln-type: "os,library"
           severity: "CRITICAL"
 
-  # ── Job 3: Build + Push to ECR ────────────────────────────────────────────
-  build-and-push:
-    name: Build & Push to ECR
-    runs-on: ubuntu-latest
-    needs: [test, security-scan]
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    outputs:
-      image: ${{ steps.build-image.outputs.image }}
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
       - name: Configure AWS credentials
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -119,22 +155,24 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Login to Amazon ECR
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Build, tag, and push image to ECR
-        id: build-image
+      - name: Tag and push image to Amazon ECR
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        id: push-image
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           IMAGE_TAG: ${{ github.sha }}
         run: |
-          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
-          docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:latest
+          docker tag local-image:latest $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          docker tag local-image:latest $ECR_REGISTRY/$ECR_REPOSITORY:latest
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
           echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
 
-  # ── Job 4: Terraform Apply ────────────────────────────────────────────────
+  # ── Job 4: Terraform Plan & Apply ───────────────────────────────────────────
   terraform:
     name: Terraform Apply
     runs-on: ubuntu-latest
@@ -163,13 +201,13 @@ jobs:
 
       - name: Terraform Plan
         working-directory: terraform/
-        run: terraform plan -var="image_tag=${{ github.sha }}"
+        run: terraform plan -out=tfplan -var="image_tag=${{ github.sha }}"
 
       - name: Terraform Apply
         working-directory: terraform/
-        run: terraform apply -auto-approve -var="image_tag=${{ github.sha }}"
+        run: terraform apply -auto-approve tfplan
 
-  # ── Job 5: Deploy to ECS + Migrate ────────────────────────────────────────
+  # ── Job 5: Deploy to ECS + Migrate ──────────────────────────────────────────
   deploy:
     name: Deploy to ECS
     runs-on: ubuntu-latest
@@ -196,7 +234,6 @@ jobs:
             --network-configuration "awsvpcConfiguration={subnets=[${{ secrets.SUBNET_ID }}],securityGroups=[${{ secrets.SECURITY_GROUP_ID }}],assignPublicIp=ENABLED}" \
             --overrides '{"containerOverrides":[{"name":"${{ env.CONTAINER_NAME }}","command":["python","manage.py","migrate"]}]}'
 
-
       - name: Update ECS service with new image
         run: |
           aws ecs update-service \
@@ -210,7 +247,7 @@ jobs:
             --cluster ${{ env.ECS_CLUSTER }} \
             --services ${{ env.ECS_SERVICE }}
 
-  # ── Job 6: Notify ─────────────────────────────────────────────────────────
+  # ── Job 6: Slack Notification ───────────────────────────────────────────────
   notify:
     name: Slack Notification
     runs-on: ubuntu-latest
