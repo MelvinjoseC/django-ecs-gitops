@@ -26,17 +26,17 @@ resource "aws_ecs_task_definition" "app" {
     }]
 
     environment = [
-      { name = "DEBUG",         value = "False" },
+      { name = "DEBUG", value = "False" },
       { name = "ALLOWED_HOSTS", value = var.allowed_hosts },
-      { name = "DB_HOST",       value = var.db_host },
-      { name = "DB_PORT",       value = "5432" },
-      { name = "DB_NAME",       value = var.db_name },
+      { name = "DB_HOST", value = var.db_host },
+      { name = "DB_PORT", value = "5432" },
+      { name = "DB_NAME", value = var.db_name },
     ]
 
     secrets = [
       { name = "DJANGO_SECRET_KEY", valueFrom = var.secret_key_arn },
-      { name = "DB_USER",           valueFrom = var.db_user_arn },
-      { name = "DB_PASSWORD",       valueFrom = var.db_password_arn },
+      { name = "DB_USER", valueFrom = var.db_user_arn },
+      { name = "DB_PASSWORD", valueFrom = var.db_password_arn },
     ]
 
     logConfiguration = {
