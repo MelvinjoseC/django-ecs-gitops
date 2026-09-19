@@ -1,24 +1,62 @@
-FROM python:3.11-slim
+# =============================================================================
+# Stage 1: Build & dependency compilation
+# =============================================================================
+FROM python:3.11-slim AS builder
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
-WORKDIR /app
+WORKDIR /build
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    gcc libpq-dev curl \
+    gcc \
+    libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
 
-COPY . .
+# =============================================================================
+# Stage 2: Minimal hardened runtime
+# =============================================================================
+FROM python:3.11-slim AS runner
 
+LABEL org.opencontainers.image.title="django-ecs-gitops" \
+      org.opencontainers.image.description="Production Django REST API for AWS ECS Fargate" \
+      org.opencontainers.image.authors="MelvinjoseC" \
+      org.opencontainers.image.source="https://github.com/MelvinjoseC/django-ecs-gitops"
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PATH="/install/bin:${PATH}" \
+    PYTHONPATH="/install/lib/python3.11/site-packages:${PYTHONPATH}"
+
+WORKDIR /app
+
+# Install runtime PostgreSQL client library without build tools
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libpq5 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create restricted non-root system user and group
+RUN groupadd -g 10001 appuser && \
+    useradd -u 10001 -g appuser -d /app -s /sbin/nologin -M appuser
+
+# Copy installed Python packages and source code
+COPY --from=builder /install /install
+COPY --chown=appuser:appuser . .
+
+# Collect static assets
 RUN python manage.py collectstatic --noinput || true
+
+# Enforce secure ownership and switch user
+RUN chown -R appuser:appuser /app
+USER appuser
 
 EXPOSE 8000
 
+# Native Python healthcheck with exit code validation
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
-    CMD curl -f http://localhost:8000/api/ || exit 1
+    CMD python -c "import urllib.request, sys; res = urllib.request.urlopen('http://localhost:8000/api/health/', timeout=5); sys.exit(0 if res.getcode() == 200 else 1)" || exit 1
 
-CMD ["gunicorn", "app.core.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "2", "--timeout", "120"]
+CMD ["gunicorn", "-c", "gunicorn.conf.py", "app.core.wsgi:application"]
