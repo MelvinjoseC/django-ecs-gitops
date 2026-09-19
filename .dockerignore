@@ -1,0 +1,57 @@
+# Version Control & CI
+.git
+.gitignore
+.github
+
+# Python & Testing artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+*.db
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+*.egg-info/
+.eggs/
+
+# Environments & Secrets
+.env
+.env.*
+!.env.example
+.venv
+env/
+venv/
+ENV/
+*.pem
+*.key
+
+# IDEs & System files
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.swp
+.DS_Store
+Thumbs.db
+
+# Terraform
+terraform/.terraform/
+terraform/*.tfstate*
+terraform/terraform.tfvars
+terraform/terraform.tfvars.json
+terraform/tfplan*
+
+# Local build, scripts, static and logs
+staticfiles/
+media/
+scripts/
+*.log
+tmp/
+db.sqlite3
+Dockerfile*
+docker-compose*.yml
+README.md
+Makefile
