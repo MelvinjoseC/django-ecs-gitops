@@ -240,14 +240,36 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
           audience: sts.amazonaws.com
 
-      - name: Run Django migrations via ECS run-task
+      - name: Run Django database migrations with verification gate
+        id: run-migration
         run: |
-          aws ecs run-task \
+          echo "Triggering standalone ECS migration task..."
+          TASK_OUTPUT=$(aws ecs run-task \
             --cluster ${{ env.ECS_CLUSTER }} \
             --task-definition django-app \
             --launch-type FARGATE \
             --network-configuration "awsvpcConfiguration={subnets=[${{ secrets.SUBNET_ID }}],securityGroups=[${{ secrets.SECURITY_GROUP_ID }}],assignPublicIp=ENABLED}" \
-            --overrides '{"containerOverrides":[{"name":"${{ env.CONTAINER_NAME }}","command":["python","manage.py","migrate"]}]}'
+            --overrides '{"containerOverrides":[{"name":"${{ env.CONTAINER_NAME }}","command":["python","manage.py","migrate"]}]}')
+
+          TASK_ARN=$(echo "$TASK_OUTPUT" | jq -r '.tasks[0].taskArn')
+          echo "Task launched with ARN: $TASK_ARN"
+
+          if [ -z "$TASK_ARN" ] || [ "$TASK_ARN" == "null" ]; then
+            echo "Error: Failed to launch migration task."
+            exit 1
+          fi
+
+          echo "Waiting for migration task to complete..."
+          aws ecs wait tasks-stopped --cluster ${{ env.ECS_CLUSTER }} --tasks "$TASK_ARN"
+
+          EXIT_CODE=$(aws ecs describe-tasks --cluster ${{ env.ECS_CLUSTER }} --tasks "$TASK_ARN" | jq -r '.tasks[0].containers[0].exitCode')
+          echo "Migration task exited with status: $EXIT_CODE"
+
+          if [ "$EXIT_CODE" -ne 0 ]; then
+            echo "Error: Migration failed with exit code $EXIT_CODE"
+            exit 1
+          fi
+          echo "Database migration completed successfully."
 
       - name: Update ECS service with new image
         run: |
@@ -261,6 +283,31 @@ jobs:
           aws ecs wait services-stable \
             --cluster ${{ env.ECS_CLUSTER }} \
             --services ${{ env.ECS_SERVICE }}
+
+      - name: Execute post-deployment health smoke tests
+        run: |
+          echo "Fetching ALB endpoint..."
+          ALB_DNS=$(aws elbv2 describe-load-balancers --names "${{ env.ECS_CLUSTER }}-alb" --query "LoadBalancers[0].DNSName" --output text 2>/dev/null || echo "")
+
+          if [ -n "$ALB_DNS" ] && [ "$ALB_DNS" != "None" ]; then
+            echo "Running smoke tests against http://$ALB_DNS/api/health/ready/..."
+            for i in {1..10}; do
+              HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "http://$ALB_DNS/api/health/ready/" || true)
+              echo "Attempt $i: Received HTTP $HTTP_CODE"
+              if [ "$HTTP_CODE" -eq 200 ]; then
+                echo "Smoke test passed successfully!"
+                break
+              fi
+              if [ "$i" -eq 10 ]; then
+                echo "Smoke test failed after 10 attempts."
+                exit 1
+              fi
+              sleep 6
+            done
+          else
+            echo "Note: ALB endpoint not discovered or offline, skipping remote HTTP probe."
+          fi
+
 
   # ── Job 6: Slack Notification ───────────────────────────────────────────────
   notify:
