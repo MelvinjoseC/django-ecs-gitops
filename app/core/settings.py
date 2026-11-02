@@ -24,6 +24,7 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
+    "app.core.middleware.RequestIDMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
@@ -100,22 +101,31 @@ REST_FRAMEWORK = {
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
+    "filters": {
+        "request_id": {
+            "()": "app.core.middleware.RequestIDFilter",
+        },
+    },
     "formatters": {
         "json": {
             "()": "pythonjsonlogger.json.JsonFormatter",
             "format": (
                 "%(asctime)s %(levelname)s %(name)s %(module)s "
-                "%(process)d %(thread)d %(message)s"
+                "%(request_id)s %(process)d %(thread)d %(message)s"
             ),
         },
         "simple": {
-            "format": "[%(asctime)s] %(levelname)s [%(name)s:%(lineno)s] %(message)s",
+            "format": (
+                "[%(asctime)s] [%(request_id)s] %(levelname)s "
+                "[%(name)s:%(lineno)s] %(message)s"
+            ),
             "datefmt": "%Y-%m-%d %H:%M:%S",
         },
     },
     "handlers": {
         "console": {
             "class": "logging.StreamHandler",
+            "filters": ["request_id"],
             "formatter": "simple" if DEBUG else "json",
         },
     },
