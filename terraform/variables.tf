@@ -85,6 +85,12 @@ variable "db_password_arn" {
   description = "The SSM Parameter ARN for the database password"
 }
 
+variable "certificate_arn" {
+  type        = string
+  default     = ""
+  description = "Optional ACM SSL certificate ARN for HTTPS ALB listener termination"
+}
+
 variable "tags" {
   type        = map(string)
   description = "A map of tags to assign to all resources"
