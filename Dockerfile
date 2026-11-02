@@ -33,9 +33,10 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-# Install runtime PostgreSQL client library without build tools
+# Install runtime PostgreSQL client library and dumb-init for PID 1 signal forwarding
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq5 \
+    dumb-init \
     && rm -rf /var/lib/apt/lists/*
 
 # Create restricted non-root system user and group
@@ -55,8 +56,9 @@ USER appuser
 
 EXPOSE 8000
 
-# Native Python healthcheck with exit code validation
-HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
-    CMD python -c "import urllib.request, sys; res = urllib.request.urlopen('http://localhost:8000/api/health/', timeout=5); sys.exit(0 if res.getcode() == 200 else 1)" || exit 1
+# Native Python healthcheck with exit code validation using lightweight liveness probe
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+    CMD python -c "import urllib.request, sys; res = urllib.request.urlopen('http://localhost:8000/api/health/live/', timeout=3); sys.exit(0 if res.getcode() == 200 else 1)" || exit 1
 
+ENTRYPOINT ["/usr/bin/dumb-init", "--"]
 CMD ["gunicorn", "-c", "gunicorn.conf.py", "app.core.wsgi:application"]
