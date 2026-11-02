@@ -65,6 +65,7 @@ if IS_TESTING and os.environ.get("FORCE_DB_POSTGRES", "False").lower() not in ("
         "default": {
             "ENGINE": "django.db.backends.sqlite3",
             "NAME": ":memory:",
+            "CONN_HEALTH_CHECKS": True,
         }
     }
 else:
@@ -77,6 +78,13 @@ else:
             "HOST": os.environ.get("DB_HOST", "localhost"),
             "PORT": os.environ.get("DB_PORT", "5432"),
             "CONN_MAX_AGE": int(os.environ.get("DB_CONN_MAX_AGE", "60")),
+            "CONN_HEALTH_CHECKS": True,
+            "OPTIONS": {
+                "sslmode": os.environ.get(
+                    "DB_SSLMODE", "require" if not DEBUG else "prefer"
+                ),
+                "connect_timeout": int(os.environ.get("DB_CONNECT_TIMEOUT", "5")),
+            },
         }
     }
 
@@ -85,6 +93,7 @@ TIME_ZONE = "UTC"
 
 STATIC_URL = "/static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
+STATIC_ROOT.mkdir(parents=True, exist_ok=True)
 STORAGES = {
     "default": {
         "BACKEND": "django.core.files.storage.FileSystemStorage",
