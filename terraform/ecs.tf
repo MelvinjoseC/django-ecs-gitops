@@ -7,6 +7,23 @@ resource "aws_ecs_cluster" "main" {
   }
 }
 
+resource "aws_ecs_cluster_capacity_providers" "main" {
+  cluster_name = aws_ecs_cluster.main.name
+
+  capacity_providers = ["FARGATE", "FARGATE_SPOT"]
+
+  default_capacity_provider_strategy {
+    base              = 1
+    weight            = 1
+    capacity_provider = "FARGATE"
+  }
+
+  default_capacity_provider_strategy {
+    weight            = 2
+    capacity_provider = "FARGATE_SPOT"
+  }
+}
+
 resource "aws_ecs_task_definition" "app" {
   family                   = "django-app"
   network_mode             = "awsvpc"
@@ -17,8 +34,9 @@ resource "aws_ecs_task_definition" "app" {
   task_role_arn            = aws_iam_role.ecs_task.arn
 
   container_definitions = jsonencode([{
-    name  = "django-app"
-    image = "${aws_ecr_repository.app.repository_url}:${var.image_tag}"
+    name        = "django-app"
+    image       = "${aws_ecr_repository.app.repository_url}:${var.image_tag}"
+    stopTimeout = 30
 
     portMappings = [{
       containerPort = 8000
@@ -49,7 +67,7 @@ resource "aws_ecs_task_definition" "app" {
     }
 
     healthCheck = {
-      command     = ["CMD-SHELL", "python -c \"import urllib.request, sys; res = urllib.request.urlopen('http://localhost:8000/api/health/', timeout=5); sys.exit(0 if res.getcode() == 200 else 1)\" || exit 1"]
+      command     = ["CMD-SHELL", "python -c \"import urllib.request, sys; res = urllib.request.urlopen('http://localhost:8000/api/health/live/', timeout=5); sys.exit(0 if res.getcode() == 200 else 1)\" || exit 1"]
       interval    = 30
       timeout     = 10
       retries     = 3
@@ -63,9 +81,25 @@ resource "aws_ecs_service" "app" {
   cluster                            = aws_ecs_cluster.main.id
   task_definition                    = aws_ecs_task_definition.app.arn
   desired_count                      = 1
-  launch_type                        = "FARGATE"
   deployment_minimum_healthy_percent = 100
   deployment_maximum_percent         = 200
+  enable_execute_command             = true
+
+  capacity_provider_strategy {
+    capacity_provider = "FARGATE"
+    weight            = 1
+    base              = 1
+  }
+
+  capacity_provider_strategy {
+    capacity_provider = "FARGATE_SPOT"
+    weight            = 2
+  }
+
+  deployment_circuit_breaker {
+    enable   = true
+    rollback = true
+  }
 
   network_configuration {
     subnets          = var.subnet_ids
