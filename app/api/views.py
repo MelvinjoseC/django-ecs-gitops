@@ -1,17 +1,19 @@
 import time
 from django.db import connection
 from rest_framework import filters, status, viewsets
-from rest_framework.decorators import api_view, permission_classes
+from rest_framework.decorators import api_view, permission_classes, throttle_classes
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
 from .models import Task
+from .pagination import StandardResultsSetPagination
 from .serializers import TaskSerializer
 
 
 class TaskViewSet(viewsets.ModelViewSet):
     queryset = Task.objects.all()
     serializer_class = TaskSerializer
+    pagination_class = StandardResultsSetPagination
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ["title", "description", "status"]
     ordering_fields = ["created_at", "status"]
@@ -19,6 +21,7 @@ class TaskViewSet(viewsets.ModelViewSet):
 
 @api_view(["GET"])
 @permission_classes([AllowAny])
+@throttle_classes([])
 def health_live(request):
     """
     Shallow liveness probe for ECS container checks and load balancer process monitoring.
@@ -36,6 +39,7 @@ def health_live(request):
 
 @api_view(["GET"])
 @permission_classes([AllowAny])
+@throttle_classes([])
 def health_ready(request):
     """
     Deep readiness probe for traffic routing verification.
@@ -67,6 +71,7 @@ def health_ready(request):
 
 @api_view(["GET"])
 @permission_classes([AllowAny])
+@throttle_classes([])
 def health_check(request):
     """
     Legacy backwards-compatible endpoint maintaining compatibility with ALB target group checks.

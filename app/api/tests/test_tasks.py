@@ -1,7 +1,7 @@
 from django.test import TestCase
 from django.urls import reverse
-from rest_framework.test import APIClient
 from rest_framework import status
+from rest_framework.test import APIClient
 from app.api.models import Task
 
 
@@ -44,3 +44,19 @@ class TaskAPITestCase(TestCase):
         response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertGreater(len(response.data["results"]), 0)
+
+    def test_custom_page_size_pagination(self):
+        """Verify client can specify custom page_size within configured limit."""
+        for i in range(15):
+            Task.objects.create(title=f"Task {i}", status="todo")
+        url = reverse("task-list") + "?page_size=5"
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data["results"]), 5)
+        self.assertIn("next", response.data)
+
+    def test_ordering_tasks(self):
+        """Verify ordering tasks by creation time."""
+        url = reverse("task-list") + "?ordering=-created_at"
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)

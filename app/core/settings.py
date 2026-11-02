@@ -109,9 +109,17 @@ CORS_ALLOW_ALL_ORIGINS = (
 CORS_ALLOW_CREDENTIALS = True
 
 REST_FRAMEWORK = {
-    "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
+    "DEFAULT_PAGINATION_CLASS": "app.api.pagination.StandardResultsSetPagination",
     "PAGE_SIZE": 10,
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+    "DEFAULT_THROTTLE_CLASSES": [
+        "rest_framework.throttling.AnonRateThrottle",
+        "rest_framework.throttling.UserRateThrottle",
+    ],
+    "DEFAULT_THROTTLE_RATES": {
+        "anon": os.environ.get("DRF_ANON_THROTTLE_RATE", "120/min"),
+        "user": os.environ.get("DRF_USER_THROTTLE_RATE", "600/min"),
+    },
 }
 
 SPECTACULAR_SETTINGS = {
