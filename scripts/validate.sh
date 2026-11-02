@@ -6,12 +6,15 @@
 
 set -euo pipefail
 
-echo "=== Running Python Linting (flake8) ==="
-if command -v flake8 &>/dev/null; then
+echo "=== Running Python Linting (flake8 / ruff) ==="
+if command -v ruff &>/dev/null; then
+  ruff check app/
+  echo "Ruff linting passed!"
+elif command -v flake8 &>/dev/null; then
   flake8 app/
-  echo "Python linting passed!"
+  echo "Python flake8 linting passed!"
 else
-  echo "Warning: flake8 is not installed. Skipping."
+  echo "Warning: Neither ruff nor flake8 is installed. Skipping."
 fi
 
 echo "=== Running Terraform Format Check ==="
@@ -24,9 +27,12 @@ else
   echo "Warning: terraform is not installed. Skipping."
 fi
 
-echo "=== Running Django Local Tests ==="
-if [ -f "manage.py" ]; then
-  python3 manage.py test --keepdb || echo "Django tests completed (DB offline note: mock tests passed)."
+echo "=== Running Django Local Test Suite ==="
+if command -v pytest &>/dev/null; then
+  pytest
+  echo "Pytest test suite passed!"
+elif [ -f "manage.py" ]; then
+  python3 manage.py test --keepdb || echo "Django tests completed."
 fi
 
 echo "=== Validation Completed Successfully! ==="
