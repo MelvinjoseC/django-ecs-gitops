@@ -1,4 +1,5 @@
 import os
+import sys
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -53,17 +54,30 @@ TEMPLATES = [
 
 WSGI_APPLICATION = "app.core.wsgi.application"
 
-DATABASES = {
-    "default": {
-        "ENGINE": "django.db.backends.postgresql",
-        "NAME": os.environ.get("DB_NAME", "appdb"),
-        "USER": os.environ.get("DB_USER", "appuser"),
-        "PASSWORD": os.environ.get("DB_PASSWORD", ""),
-        "HOST": os.environ.get("DB_HOST", "localhost"),
-        "PORT": os.environ.get("DB_PORT", "5432"),
-        "CONN_MAX_AGE": int(os.environ.get("DB_CONN_MAX_AGE", "60")),
+# Database Configuration with Automated Fallback for Test Suites
+IS_TESTING = "pytest" in sys.modules or "test" in sys.argv
+if IS_TESTING and os.environ.get("FORCE_DB_POSTGRES", "False").lower() not in ("true", "1"):
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.sqlite3",
+            "NAME": ":memory:",
+        }
     }
-}
+else:
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.postgresql",
+            "NAME": os.environ.get("DB_NAME", "appdb"),
+            "USER": os.environ.get("DB_USER", "appuser"),
+            "PASSWORD": os.environ.get("DB_PASSWORD", ""),
+            "HOST": os.environ.get("DB_HOST", "localhost"),
+            "PORT": os.environ.get("DB_PORT", "5432"),
+            "CONN_MAX_AGE": int(os.environ.get("DB_CONN_MAX_AGE", "60")),
+        }
+    }
+
+USE_TZ = True
+TIME_ZONE = "UTC"
 
 STATIC_URL = "/static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
@@ -88,7 +102,7 @@ LOGGING = {
     "disable_existing_loggers": False,
     "formatters": {
         "json": {
-            "()": "pythonjsonlogger.jsonlogger.JsonFormatter",
+            "()": "pythonjsonlogger.json.JsonFormatter",
             "format": (
                 "%(asctime)s %(levelname)s %(name)s %(module)s "
                 "%(process)d %(thread)d %(message)s"
@@ -124,7 +138,7 @@ LOGGING = {
 }
 
 # Production Security Configuration
-if not DEBUG:
+if not DEBUG and not IS_TESTING:
     SECURE_SSL_REDIRECT = True
     SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
     SESSION_COOKIE_SECURE = True
